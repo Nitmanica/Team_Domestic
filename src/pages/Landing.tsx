@@ -32,8 +32,8 @@ const Landing = () => {
           <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
             <a href="#demo" className="hover:text-foreground transition-colors">Demo</a>
-            <Button size="sm" className="gradient-primary border-0 text-primary-foreground hover:opacity-90" onClick={() => navigate("/admin")}>
-              Admin Dashboard
+            <Button size="sm" className="gradient-primary border-0 text-primary-foreground hover:opacity-90" onClick={() => navigate("/login")}>
+              Admin / Login
             </Button>
           </div>
         </nav>
@@ -56,10 +56,10 @@ const Landing = () => {
               Smart contract escrow payments that automatically lock and release funds when delivery is confirmed. No disputes. No fraud. Just trust.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button size="lg" className="gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-2" onClick={() => navigate("/customer")}>
+              <Button size="lg" className="gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-2" onClick={() => navigate("/login")}>
                 Customer App <ArrowRight className="w-4 h-4" />
               </Button>
-              <Button size="lg" variant="outline" className="gap-2" onClick={() => navigate("/driver")}>
+              <Button size="lg" variant="outline" className="gap-2" onClick={() => navigate("/login")}>
                 <Globe className="w-4 h-4" /> Driver App
               </Button>
             </div>

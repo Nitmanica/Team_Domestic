@@ -1,24 +1,20 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Package, Truck, DollarSign, AlertTriangle, CheckCircle, Clock, Shield, ExternalLink, BarChart3, Users, Search, Filter, ChevronDown } from "lucide-react";
+import { Package, Truck, DollarSign, AlertTriangle, CheckCircle, Clock, Shield, ExternalLink, BarChart3, Users, Search, Filter } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BlockchainCard } from "@/components/BlockchainCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
+import { orders as ordersApi, disputes as disputesApi, type Order, type Dispute } from "@/lib/api";
 
-const transactions = [
-  { id: "#TR-4521", customer: "Arjun M.", driver: "Raj K.", amount: "₹2,400", status: "transit" as const, hash: "0x7a3f...8d2e" },
-  { id: "#TR-4520", customer: "Priya S.", driver: "Amit S.", amount: "₹3,100", status: "completed" as const, hash: "0x9b4c...1f7a" },
-  { id: "#TR-4519", customer: "Vikram R.", driver: "Priya M.", amount: "₹4,200", status: "disputed" as const, hash: "0x2e8d...4c9b" },
-  { id: "#TR-4518", customer: "Neha K.", driver: "Suresh P.", amount: "₹1,800", status: "completed" as const, hash: "0x5f1a...7e3d" },
-  { id: "#TR-4517", customer: "Rohit G.", driver: "Deepak L.", amount: "₹5,600", status: "locked" as const, hash: "0x8c2b...6a4f" },
-];
+const mapStatus = (s: string) => (s === "in_transit" ? "transit" : s === "released" ? "completed" : s) as "transit" | "completed" | "locked" | "delivered" | "disputed" | "created";
 
 const fraudAlerts = [
-  { severity: "high", message: "Suspicious route deviation detected — Order #TR-4519", time: "12 min ago" },
-  { severity: "medium", message: "Repeated disputes from driver Priya M.", time: "2h ago" },
-  { severity: "low", message: "Potential GPS spoofing — Order #TR-4515", time: "5h ago" },
+  { severity: "high", message: "Suspicious route deviation detected", time: "12 min ago" },
+  { severity: "medium", message: "Repeated disputes from driver", time: "2h ago" },
+  { severity: "low", message: "Potential GPS spoofing", time: "5h ago" },
 ];
 
 const drivers = [
@@ -30,6 +26,19 @@ const drivers = [
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [transactions, setTransactions] = useState<Order[]>([]);
+  const [disputesList, setDisputesList] = useState<Dispute[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([ordersApi.all(), disputesApi.list()])
+      .then(([orders, disputes]) => {
+        setTransactions(orders);
+        setDisputesList(disputes);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -134,20 +143,20 @@ const AdminDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx, i) => (
+                {(loading ? [] : transactions).map((tx, i) => (
                   <motion.tr
-                    key={tx.id}
+                    key={tx.order_id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.05 }}
                     className="border-b border-border/30 hover:bg-muted/30 transition-colors"
                   >
-                    <td className="py-3 font-mono font-semibold">{tx.id}</td>
-                    <td className="py-3">{tx.customer}</td>
-                    <td className="py-3">{tx.driver}</td>
-                    <td className="py-3 font-semibold">{tx.amount}</td>
-                    <td className="py-3"><StatusBadge status={tx.status} /></td>
-                    <td className="py-3 font-mono text-xs text-muted-foreground flex items-center gap-1">{tx.hash} <ExternalLink className="w-3 h-3" /></td>
+                    <td className="py-3 font-mono font-semibold">#{tx.order_id}</td>
+                    <td className="py-3">{tx.customer_name || "—"}</td>
+                    <td className="py-3">{tx.driver_name || "—"}</td>
+                    <td className="py-3 font-semibold">{tx.amount_display || "—"}</td>
+                    <td className="py-3"><StatusBadge status={mapStatus(tx.status)} /></td>
+                    <td className="py-3 font-mono text-xs text-muted-foreground flex items-center gap-1">{tx.escrow_tx_lock ? `${tx.escrow_tx_lock.slice(0, 10)}...` : "—"} <ExternalLink className="w-3 h-3" /></td>
                   </motion.tr>
                 ))}
               </tbody>

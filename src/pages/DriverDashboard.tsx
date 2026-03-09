@@ -1,18 +1,57 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Package, Truck, DollarSign, Star, MapPin, Check, X, Navigation, Upload, Camera } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-
-const availableOrders = [
-  { id: "#TR-4525", pickup: "Andheri East", drop: "Hinjewadi, Pune", cargo: "Electronics", weight: "350 kg", distance: "148 km", amount: "₹2,400" },
-  { id: "#TR-4526", pickup: "Powai", drop: "Nashik", cargo: "Textiles", weight: "200 kg", distance: "170 km", amount: "₹2,800" },
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { orders as ordersApi, delivery, type Order } from "@/lib/api";
+import { toast } from "sonner";
 
 const DriverDashboard = () => {
-  const [accepted, setAccepted] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
+  const [myOrders, setMyOrders] = useState<Order[]>([]);
+  const [accepted, setAccepted] = useState<Order | null>(null);
   const [showProof, setShowProof] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [submittingProof, setSubmittingProof] = useState(false);
+
+  useEffect(() => {
+    ordersApi.available().then(setAvailableOrders).catch(() => {});
+    ordersApi.myDriver().then(setMyOrders).catch(() => {});
+  }, []);
+
+  const handleAccept = async (order: Order) => {
+    setLoading(true);
+    try {
+      await ordersApi.accept(order.order_id);
+      setAccepted(order);
+      setAvailableOrders((prev) => prev.filter((o) => o.order_id !== order.order_id));
+      setMyOrders((prev) => [order, ...prev]);
+      toast.success("Order accepted");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to accept");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitProof = async () => {
+    if (!accepted) return;
+    setSubmittingProof(true);
+    try {
+      await delivery.proof({ order_id: accepted.order_id, gps_lat: 18.5204, gps_lng: 73.8567 });
+      toast.success("Delivery proof submitted");
+      setShowProof(false);
+      setAccepted(null);
+      ordersApi.myDriver().then(setMyOrders).catch(() => {});
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit proof");
+    } finally {
+      setSubmittingProof(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -21,7 +60,7 @@ const DriverDashboard = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <p className="text-primary-foreground/60 text-sm">Driver Dashboard</p>
-            <h1 className="text-xl font-display font-bold text-primary-foreground">Raj Kumar</h1>
+            <h1 className="text-xl font-display font-bold text-primary-foreground">{user?.full_name || user?.email || "Driver"}</h1>
           </div>
           <div className="w-10 h-10 rounded-full bg-primary-foreground/10 flex items-center justify-center">
             <span className="text-primary-foreground font-bold">RK</span>
@@ -51,42 +90,46 @@ const DriverDashboard = () => {
           <>
             <h2 className="font-display font-semibold text-sm mb-3">Available Deliveries</h2>
             <div className="space-y-3">
-              {availableOrders.map((order, i) => (
-                <motion.div key={order.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.15 }} className="glass-card-elevated p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-semibold text-sm">{order.id}</span>
-                    <span className="text-lg font-bold text-secondary">{order.amount}</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs">
-                      <div className="w-2 h-2 rounded-full bg-success" />
-                      <span>{order.pickup}</span>
+              {availableOrders.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No available deliveries right now.</p>
+              ) : (
+                availableOrders.map((order, i) => (
+                  <motion.div key={order.order_id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.15 }} className="glass-card-elevated p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-semibold text-sm">#{order.order_id}</span>
+                      <span className="text-lg font-bold text-secondary">{order.amount_display || "—"}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <div className="w-2 h-2 rounded-full bg-destructive" />
-                      <span>{order.drop}</span>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs">
+                        <div className="w-2 h-2 rounded-full bg-success" />
+                        <span>{order.pickup_location || "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <div className="w-2 h-2 rounded-full bg-destructive" />
+                        <span>{order.drop_location || "—"}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-4 text-xs text-muted-foreground">
-                    <span>{order.cargo}</span>
-                    <span>{order.weight}</span>
-                    <span>{order.distance}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => setAccepted(order.id)} className="flex-1 gradient-primary border-0 text-primary-foreground h-9 text-xs gap-1">
-                      <Check className="w-3 h-3" /> Accept
-                    </Button>
-                    <Button variant="outline" className="h-9 text-xs gap-1">
-                      <X className="w-3 h-3" /> Reject
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      <span>{order.cargo_category || "—"}</span>
+                      <span>{order.weight_kg ? `${order.weight_kg} kg` : "—"}</span>
+                      <span>{order.distance_km ? `${order.distance_km} km` : "—"}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleAccept(order)} disabled={loading} className="flex-1 gradient-primary border-0 text-primary-foreground h-9 text-xs gap-1">
+                        <Check className="w-3 h-3" /> Accept
+                      </Button>
+                      <Button variant="outline" className="h-9 text-xs gap-1">
+                        <X className="w-3 h-3" /> Reject
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </div>
           </>
         ) : !showProof ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            <h2 className="font-display font-semibold text-sm">Active Delivery {accepted}</h2>
+            <h2 className="font-display font-semibold text-sm">Active Delivery {accepted?.order_id}</h2>
             <div className="glass-card-elevated p-4 space-y-4">
               <StatusBadge status="transit" />
               <div className="bg-muted/50 rounded-xl h-40 flex items-center justify-center">
@@ -102,7 +145,7 @@ const DriverDashboard = () => {
                 <span className="font-semibold">1h 15min</span>
               </div>
               <Button onClick={() => setShowProof(true)} className="w-full gradient-accent border-0 text-accent-foreground h-10 text-sm gap-2">
-                <Upload className="w-4 h-4" /> Upload Delivery Proof
+                <Upload className="w-4 h-4" /> Upload Delivery Proof (photo step)
               </Button>
             </div>
           </motion.div>
@@ -118,8 +161,8 @@ const DriverDashboard = () => {
                 <MapPin className="w-3 h-3" />
                 <span>GPS: 18.5204° N, 73.8567° E</span>
               </div>
-              <Button className="w-full gradient-primary border-0 text-primary-foreground h-10 text-sm gap-2">
-                <Upload className="w-4 h-4" /> Submit Proof & Mark Delivered
+              <Button onClick={handleSubmitProof} disabled={submittingProof} className="w-full gradient-primary border-0 text-primary-foreground h-10 text-sm gap-2">
+                <Upload className="w-4 h-4" /> {submittingProof ? "Submitting..." : "Submit Proof & Mark Delivered"}
               </Button>
             </div>
           </motion.div>

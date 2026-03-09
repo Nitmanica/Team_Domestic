@@ -1,20 +1,43 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Package, Truck, Wallet, Star, Bell, MessageCircle, MapPin, Plus, Clock, ChevronRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { orders as ordersApi, delivery, escrow, type Order } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MobileNavBar } from "@/components/MobileNavBar";
 import { DeliveryTimeline } from "@/components/DeliveryTimeline";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
-
-const recentDeliveries = [
-  { id: "#TR-4521", route: "Mumbai → Pune", driver: "Raj K.", cost: "₹2,400", status: "transit" as const },
-  { id: "#TR-4520", route: "Delhi → Jaipur", driver: "Amit S.", cost: "₹3,100", status: "completed" as const },
-  { id: "#TR-4519", route: "Bangalore → Chennai", driver: "Priya M.", cost: "₹4,200", status: "delivered" as const },
-];
+import { toast } from "sonner";
 
 const CustomerDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [recentDeliveries, setRecentDeliveries] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    ordersApi.myCustomer().then((list) => {
+      setRecentDeliveries(list.slice(0, 10));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const mapStatus = (s: string) => (s === "in_transit" ? "transit" : s === "released" ? "completed" : s) as "transit" | "completed" | "locked" | "delivered" | "disputed" | "created";
+  const [releasing, setReleasing] = useState<string | null>(null);
+  const handleConfirmAndRelease = async (order: Order) => {
+    if (order.status !== "delivered") return;
+    setReleasing(order.order_id);
+    try {
+      await delivery.confirm(order.order_id);
+      await escrow.release(order.order_id);
+      ordersApi.myCustomer().then((list) => setRecentDeliveries(list.slice(0, 10)));
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to release");
+    } finally {
+      setReleasing(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -23,7 +46,7 @@ const CustomerDashboard = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <p className="text-primary-foreground/60 text-sm">Welcome back</p>
-            <h1 className="text-xl font-display font-bold text-primary-foreground">Arjun Mehta</h1>
+            <h1 className="text-xl font-display font-bold text-primary-foreground">{user?.full_name || user?.email || "Customer"}</h1>
           </div>
           <div className="flex items-center gap-3">
             <button className="w-9 h-9 rounded-xl bg-primary-foreground/10 flex items-center justify-center">
@@ -82,50 +105,64 @@ const CustomerDashboard = () => {
 
       {/* Stats */}
       <div className="px-6 mt-6 grid grid-cols-2 gap-3">
-        <StatCard title="Active Deliveries" value={3} icon={Truck} variant="purple" />
+        <StatCard title="Active Deliveries" value={recentDeliveries.filter((o) => ["locked", "in_transit", "delivered"].includes(o.status)).length} icon={Truck} variant="purple" />
         <StatCard title="Wallet Balance" value="₹12,400" icon={Wallet} variant="teal" />
-        <StatCard title="Total Deliveries" value={47} icon={Package} subtitle="This month" />
+        <StatCard title="Total Deliveries" value={recentDeliveries.length} icon={Package} subtitle="Total" />
         <StatCard title="Reputation" value="4.8" icon={Star} trend="↑ 0.2" />
       </div>
 
-      {/* Active Delivery Timeline */}
-      <div className="px-6 mt-6">
-        <h2 className="font-display font-semibold text-sm mb-3">Active Delivery #TR-4521</h2>
-        <div className="glass-card p-4">
-          <DeliveryTimeline currentStatus="transit" />
+      {/* Active Delivery Timeline - show first active if any */}
+      {recentDeliveries.some((o) => ["locked", "in_transit"].includes(o.status)) && (
+        <div className="px-6 mt-6">
+          <h2 className="font-display font-semibold text-sm mb-3">Active Delivery</h2>
+          <div className="glass-card p-4">
+            <DeliveryTimeline currentStatus={recentDeliveries.find((o) => ["locked", "in_transit"].includes(o.status))?.status === "in_transit" ? "transit" : "locked"} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Recent Deliveries */}
       <div className="px-6 mt-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-display font-semibold text-sm">Recent Deliveries</h2>
-          <button className="text-xs text-secondary font-medium">View All</button>
         </div>
-        <div className="space-y-3">
-          {recentDeliveries.map((d, i) => (
-            <motion.div
-              key={d.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="glass-card p-4 flex items-center gap-4"
-            >
-              <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0">
-                <Package className="w-5 h-5 text-secondary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">{d.id}</p>
-                  <StatusBadge status={d.status} />
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{d.route} • {d.driver}</p>
-                <p className="text-xs font-semibold text-foreground mt-1">{d.cost}</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-            </motion.div>
-          ))}
-        </div>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : (
+          <div className="space-y-3">
+            {recentDeliveries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No deliveries yet. Book your first one!</p>
+            ) : (
+              recentDeliveries.map((d, i) => (
+                <motion.div
+                  key={d.order_id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="glass-card p-4 flex items-center gap-4"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0">
+                    <Package className="w-5 h-5 text-secondary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold">#{d.order_id}</p>
+                      <StatusBadge status={mapStatus(d.status)} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{d.pickup_location || "—"} → {d.drop_location || "—"} • {d.driver_name || "—"}</p>
+                    <p className="text-xs font-semibold text-foreground mt-1">{d.amount_display || "—"}</p>
+                    {d.status === "delivered" && (
+                      <Button size="sm" className="mt-2 gradient-primary border-0 text-primary-foreground h-8 text-xs" onClick={() => handleConfirmAndRelease(d)} disabled={!!releasing}>
+                        {releasing === d.order_id ? "Releasing..." : "Confirm & Release payment"}
+                      </Button>
+                    )}
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </motion.div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <MobileNavBar active="Home" />

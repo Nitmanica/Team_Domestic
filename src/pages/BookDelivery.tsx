@@ -4,6 +4,8 @@ import { ArrowLeft, MapPin, Package, Truck, Zap, Clock, Route, Calculator } from
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
+import { orders } from "@/lib/api";
+import { toast } from "sonner";
 
 const vehicleTypes = [
   { label: "Mini Truck", icon: "🛻", capacity: "500 kg" },
@@ -11,10 +13,39 @@ const vehicleTypes = [
   { label: "Heavy", icon: "🚚", capacity: "5 ton" },
 ];
 
+// Demo: 0.01 ETH in wei for hackathon (no real currency conversion)
+const DEMO_AMOUNT_WEI = "10000000000000000";
+
 const BookDelivery = () => {
   const navigate = useNavigate();
   const [selectedVehicle, setSelectedVehicle] = useState(1);
   const [calculated, setCalculated] = useState(false);
+  const [pickup, setPickup] = useState("Andheri East, Mumbai");
+  const [drop, setDrop] = useState("Hinjewadi, Pune");
+  const [cargo, setCargo] = useState("Electronics");
+  const [weight, setWeight] = useState("350");
+  const [creating, setCreating] = useState(false);
+
+  const handleConfirmBooking = async () => {
+    setCreating(true);
+    try {
+      const order = await orders.create({
+        pickup_location: pickup,
+        drop_location: drop,
+        cargo_category: cargo,
+        weight_kg: parseInt(weight, 10) || 0,
+        vehicle_type: vehicleTypes[selectedVehicle].label,
+        distance_km: 148,
+        amount_wei: DEMO_AMOUNT_WEI,
+        amount_display: "₹2,400",
+      });
+      navigate("/customer/escrow", { state: { order } });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to create order");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -41,12 +72,12 @@ const BookDelivery = () => {
         <div className="glass-card p-4 space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-success" />
-            <Input placeholder="Pickup location" className="border-0 bg-muted/50 h-10 text-sm" defaultValue="Andheri East, Mumbai" />
+            <Input placeholder="Pickup location" className="border-0 bg-muted/50 h-10 text-sm" value={pickup} onChange={(e) => setPickup(e.target.value)} />
           </div>
           <div className="ml-1.5 w-0.5 h-4 bg-border" />
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-destructive" />
-            <Input placeholder="Drop location" className="border-0 bg-muted/50 h-10 text-sm" defaultValue="Hinjewadi, Pune" />
+            <Input placeholder="Drop location" className="border-0 bg-muted/50 h-10 text-sm" value={drop} onChange={(e) => setDrop(e.target.value)} />
           </div>
         </div>
 
@@ -56,8 +87,8 @@ const BookDelivery = () => {
             <Package className="w-4 h-4 text-secondary" /> Cargo Details
           </h3>
           <div className="grid grid-cols-2 gap-3">
-            <Input placeholder="Cargo category" className="bg-muted/50 border-0 h-10 text-sm" defaultValue="Electronics" />
-            <Input placeholder="Weight (kg)" className="bg-muted/50 border-0 h-10 text-sm" defaultValue="350" />
+            <Input placeholder="Cargo category" className="bg-muted/50 border-0 h-10 text-sm" value={cargo} onChange={(e) => setCargo(e.target.value)} />
+            <Input placeholder="Weight (kg)" className="bg-muted/50 border-0 h-10 text-sm" value={weight} onChange={(e) => setWeight(e.target.value)} />
           </div>
         </div>
 
@@ -123,8 +154,8 @@ const BookDelivery = () => {
             <Calculator className="w-4 h-4" /> Calculate Price
           </Button>
         ) : (
-          <Button onClick={() => navigate("/customer/escrow")} className="w-full gradient-accent border-0 text-accent-foreground h-12 text-sm font-semibold gap-2">
-            Confirm Booking & Pay
+          <Button onClick={handleConfirmBooking} disabled={creating} className="w-full gradient-accent border-0 text-accent-foreground h-12 text-sm font-semibold gap-2">
+            {creating ? "Creating order..." : "Confirm Booking & Pay"}
           </Button>
         )}
       </div>
