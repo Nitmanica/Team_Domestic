@@ -1,6 +1,6 @@
 # TrustRoute Escrow – Smart Contract-Based Escrow for Transportation Apps
 
-Hackathon-ready full-stack: **React (Lovable) frontend** + **Node.js/Express backend** + **PostgreSQL** + **Ethereum (Hardhat) escrow contract** + **ethers.js** integration.
+Hackathon-ready full-stack: **React frontend** + **Node.js/Express backend** + **PostgreSQL** + **Ethereum (Hardhat) escrow contract** + **ethers.js** integration.
 
 ---
 
